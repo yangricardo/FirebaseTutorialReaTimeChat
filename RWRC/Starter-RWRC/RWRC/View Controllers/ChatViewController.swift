@@ -44,6 +44,10 @@ final class ChatViewController: MessagesViewController {
   private var reference: CollectionReference?
 
 
+  deinit {
+    //To clean things up add a deinit towards the top of the file:
+    messageListener?.remove()
+  }
   
   init(user: User, channel: Channel) {
     self.user = user
@@ -69,6 +73,18 @@ final class ChatViewController: MessagesViewController {
     reference = db.collection(["channels", id, "thread"].joined(separator: "/"))
 
     
+    // Firestore calls this snapshot listener whenever there is a change to the database.
+    messageListener = reference?.addSnapshotListener { querySnapshot, error in
+      guard let snapshot = querySnapshot else {
+        print("Error listening for channel updates: \(error?.localizedDescription ?? "No error")")
+        return
+      }
+      
+      snapshot.documentChanges.forEach { change in
+        self.handleDocumentChange(change)
+      }
+    }
+
     
     navigationItem.largeTitleDisplayMode = .never
     
@@ -115,6 +131,20 @@ final class ChatViewController: MessagesViewController {
       DispatchQueue.main.async {
         self.messagesCollectionView.scrollToBottom(animated: true)
       }
+    }
+  }
+
+  private func handleDocumentChange(_ change: DocumentChange) {
+    guard let message = Message(document: change.document) else {
+      return
+    }
+    
+    switch change.type {
+    case .added:
+      insertNewMessage(message)
+      
+    default:
+      break
     }
   }
 
