@@ -39,6 +39,10 @@ final class ChatViewController: MessagesViewController {
 //  These properties are similar to those added to the channels view controller. The messages array is the data model and the listener handles clean up.
   private var messages: [Message] = []
   private var messageListener: ListenerRegistration?
+  
+  private let db = Firestore.firestore()
+  private var reference: CollectionReference?
+
 
   
   init(user: User, channel: Channel) {
@@ -56,6 +60,16 @@ final class ChatViewController: MessagesViewController {
   override func viewDidLoad() {
     super.viewDidLoad()
     
+    /*The reference property is the point in the database where the messages are stored. The id property on the channel is optional because you might not yet have synced the channel. If the channel doesn’t exist in Firestore yet messages cannot be sent, so returning to the channel list makes the most sense.*/
+    guard let id = channel.id else {
+      navigationController?.popViewController(animated: true)
+      return
+    }
+    
+    reference = db.collection(["channels", id, "thread"].joined(separator: "/"))
+
+    
+    
     navigationItem.largeTitleDisplayMode = .never
     
     maintainPositionOnKeyboardFrameChanged = true
@@ -68,17 +82,21 @@ final class ChatViewController: MessagesViewController {
     messagesCollectionView.messagesDisplayDelegate = self
 
   }
-  
-  override func viewDidAppear(_ animated: Bool) {
-    super.viewDidAppear(animated)
-    
-    let testMessage = Message(user: user, content: "I love pizza, what is your favorite kind?")
-    insertNewMessage(testMessage)
-  }
 
   
   // MARK: - Helpers
-  
+  private func save(_ message: Message) {
+    /*This method uses the reference that was just setup. The addDocument method on the reference takes a dictionary with the keys and values that represent that data. The message data struct implements DatabaseRepresentation, which defines a dictionary property to fill out.*/
+    reference?.addDocument(data: message.representation) { error in
+      if let e = error {
+        print("Error sending message: \(e.localizedDescription)")
+        return
+      }
+      
+      self.messagesCollectionView.scrollToBottom()
+    }
+  }
+
   private func insertNewMessage(_ message: Message) {
     /*This helper method is similar to the one that’s in ChannelsViewController. It makes sure the messages array doesn’t already contain the message, then adds it to the collection view. Then, if the new message is the latest and the collection view is at the bottom, scroll to reveal the new message.*/
     guard !messages.contains(message) else {
@@ -170,7 +188,18 @@ extension ChatViewController: MessagesDataSource {
 // MARK: - MessageInputBarDelegate
 
 extension ChatViewController: MessageInputBarDelegate {
-  
+  func messageInputBar(_ inputBar: MessageInputBar, didPressSendButtonWith text: String) {
+    
+    // 1 Create a message from the contents of the message bar and the current user.
+    let message = Message(user: user, content: text)
+    
+    // 2 Save the message to Cloud Firestore using save(_:).
+    save(message)
+    
+    // 3 Clear the message bar’s input field after you send the message.
+    inputBar.inputTextView.text = ""
+  }
+
 }
 
 // MARK: - UIImagePickerControllerDelegate
