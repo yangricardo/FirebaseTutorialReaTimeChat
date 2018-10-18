@@ -27,6 +27,7 @@
 /// THE SOFTWARE.
 
 import UIKit
+import FirebaseAuth
 
 class LoginViewController: UIViewController {
   
@@ -98,6 +99,12 @@ class LoginViewController: UIViewController {
     displayNameField.resignFirstResponder()
     
     AppSettings.displayName = name
+
+    /*
+     That line of code from the FirebaseAuth framework will post the Notification.Name.AuthStateDidChange notification that AppController is listening for. Once the notification is fired AppController will update the root view controller for you.
+     */
+    Auth.auth().signInAnonymously(completion: nil)
+
   }
   
   private func showMissingNameAlert() {
